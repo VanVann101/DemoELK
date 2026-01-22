@@ -1,0 +1,43 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/services/order-api/*.log
+    fields:
+      service: order-api
+    fields_under_root: true
+    json.keys_under_root: true
+    json.add_error_key: true
+
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/services/inventory-service/*.log
+    fields:
+      service: inventory-service
+    fields_under_root: true
+    json.keys_under_root: true
+    json.add_error_key: true
+
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/services/payment-service/*.log
+    fields:
+      service: payment-service
+    fields_under_root: true
+
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+
+output.logstash:
+  hosts: ["logstash:5044"]
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0644

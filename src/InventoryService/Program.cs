@@ -16,6 +16,7 @@ builder.Host.UseSerilog((context, services, configuration) => {
         .Enrich.WithMachineName()
         .Enrich.WithThreadId()
         .WriteTo.Console(new JsonFormatter())
+        .WriteTo.File(new JsonFormatter(), "/app/logs/inventory-service.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
         .WriteTo.Http(logstashUrl, queueLimitBytes: null,
         textFormatter: new MessageTemplateTextFormatter(
                 "inventory | {Timestamp:o} | level={Level} | item={ItemId} | qty={Quantity} | user={UserId} | msg={Message:lj}", null));

@@ -1,4 +1,5 @@
 using Serilog;
+using Serilog.Formatting.Display;
 using Serilog.Formatting.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,8 +15,15 @@ builder.Host.UseSerilog((context, services, configuration) => {
         .Enrich.FromLogContext()
         .Enrich.WithMachineName()
         .Enrich.WithThreadId()
+        .Enrich.WithProperty("service", "payment-service")
         .WriteTo.Console(new JsonFormatter())
-        .WriteTo.Http(logstashUrl, queueLimitBytes: null, textFormatter: new JsonFormatter(renderMessage: true));
+        .WriteTo.File(
+            new MessageTemplateTextFormatter("timestamp=\"{Timestamp:o}\" level={Level} service=payment-service user=\"{UserId}\" message=\"{Message:lj}\"{NewLine}", null),
+            "/app/logs/payment-service.log", 
+            rollingInterval: RollingInterval.Day, 
+            retainedFileCountLimit: 7)
+        .WriteTo.Http(logstashUrl, queueLimitBytes: null, 
+            textFormatter: new MessageTemplateTextFormatter("timestamp=\"{Timestamp:o}\" level={Level} service=payment-service user=\"{UserId}\" message=\"{Message:lj}\"", null));
 });
 
 var app = builder.Build();

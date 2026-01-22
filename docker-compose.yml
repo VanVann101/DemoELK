@@ -31,8 +31,24 @@ services:
       - elasticsearch
     ports:
       - "5000:5000"
+      - "5044:5044"
     volumes:
       - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+    networks:
+      - elk
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.15.0
+    user: root
+    depends_on:
+      - logstash
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - logs-order:/var/log/services/order-api:ro
+      - logs-inventory:/var/log/services/inventory-service:ro
+      - logs-payment:/var/log/services/payment-service:ro
+      - filebeat-data:/usr/share/filebeat/data
+    command: filebeat -e -strict.perms=false
     networks:
       - elk
 
@@ -44,6 +60,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - Logstash__Host=logstash
       - Logstash__Port=5000
+    volumes:
+      - logs-inventory:/app/logs
     depends_on:
       - logstash
     networks:
@@ -57,6 +75,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - Logstash__Host=logstash
       - Logstash__Port=5000
+    volumes:
+      - logs-payment:/app/logs
     depends_on:
       - logstash
     networks:
@@ -72,6 +92,8 @@ services:
       - PaymentService__BaseUrl=http://payment-service
       - Logstash__Host=logstash
       - Logstash__Port=5000
+    volumes:
+      - logs-order:/app/logs
     ports:
       - "8080:80"
     depends_on:
@@ -83,6 +105,10 @@ services:
 
 volumes:
   esdata:
+  logs-order:
+  logs-inventory:
+  logs-payment:
+  filebeat-data:
 
 networks:
   elk:

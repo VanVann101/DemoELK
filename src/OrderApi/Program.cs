@@ -19,6 +19,7 @@ internal class Program {
                 .Enrich.WithMachineName()
                 .Enrich.WithThreadId()
                 .WriteTo.Console(new JsonFormatter())
+                .WriteTo.File(new JsonFormatter(), "/app/logs/order-api.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
                 .WriteTo.Http(logstashUrl, queueLimitBytes: null, textFormatter: new JsonFormatter(renderMessage: true));
         });
 
