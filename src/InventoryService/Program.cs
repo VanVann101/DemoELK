@@ -5,66 +5,76 @@ using Serilog.Formatting.Json;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((context, services, configuration) => {
-    var logstashHost = context.Configuration["Logstash:Host"] ?? "logstash";
-    var logstashPort = context.Configuration.GetValue<int?>("Logstash:Port") ?? 5000;
-    var logstashUrl = $"http://{logstashHost}:{logstashPort}";
-
     configuration
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services)
         .Enrich.FromLogContext()
         .Enrich.WithMachineName()
         .Enrich.WithThreadId()
+        .Enrich.WithProperty("service", "inventory-service")
         .WriteTo.Console(new JsonFormatter())
-        .WriteTo.File(new JsonFormatter(), "/app/logs/inventory-service.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
-        .WriteTo.Http(logstashUrl, queueLimitBytes: null,
-        textFormatter: new MessageTemplateTextFormatter(
-                "inventory | {Timestamp:o} | level={Level} | item={ItemId} | qty={Quantity} | user={UserId} | traceId={TraceId} | msg={Message:lj}", null));
+        .WriteTo.File(
+            new MessageTemplateTextFormatter("inventory | {Timestamp:o} | level={Level} | item={ItemId} | qty={Quantity} | user={UserId} | traceId={TraceId} | msg={Message:lj}{NewLine}", null),
+            "/app/logs/inventory-service.log", 
+            rollingInterval: RollingInterval.Day, 
+            retainedFileCountLimit: 7);
 });
 
 var app = builder.Build();
 
-var random = Random.Shared;
-var stock = new Dictionary<int, int>
+// Deterministic test scenarios based on itemId
+var testScenarios = new Dictionary<int, string>
 {
-    { 1, 100 },
-    { 2, 3 },
-    { 3, 0 }
+    { 1, "success" },           // Всё OK
+    { 2, "out_of_stock" },      // Нет на складе
+    { 3, "insufficient_funds" }, // Недостаточно средств
+    { 4, "inventory_error" },   // Ошибка в inventory service
+    { 5, "payment_error" },     // Ошибка в payment service
+    { 6, "slow_inventory" },    // Медленный inventory (задержка)
+    { 7, "slow_payment" }       // Медленный payment (задержка)
 };
 
-app.MapGet("/", () => Results.Ok(new { status = "ok", service = "inventory-service" }));
+app.MapGet("/", () => Results.Ok(new { 
+    status = "ok", 
+    service = "inventory-service",
+    testScenarios = testScenarios.Select(kv => new { itemId = kv.Key, scenario = kv.Value })
+}));
 
 app.MapPost("/inventory/check", async (InventoryRequest request, ILogger<Program> logger, HttpContext httpContext) => {
-    // Extract traceId from headers
     var traceId = httpContext.Request.Headers["X-Trace-Id"].FirstOrDefault() ?? "unknown";
     
-    // Simulate variable latency.
-    var delayMs = random.Next(50, 400);
-    await Task.Delay(delayMs);
-
-    // Simulate occasional server error.
-    if (random.NextDouble() < 0.1) {
-        logger.LogError("Inventory internal error for item {ItemId} traceId={TraceId}", request.ItemId, traceId);
-        return Results.StatusCode(StatusCodes.Status500InternalServerError);
+    // Deterministic behavior based on itemId
+    switch (request.ItemId)
+    {
+        case 1: // Success scenario
+        case 3: // Success in inventory, will fail in payment
+        case 5: // Success in inventory, will fail in payment
+        case 7: // Success with delay
+            await Task.Delay(50);
+            logger.LogInformation("Item available {ItemId} qty {Quantity} traceId={TraceId}", request.ItemId, request.Quantity, traceId);
+            return Results.Json(new InventoryResponse(true, null));
+            
+        case 2: // Out of stock
+            await Task.Delay(50);
+            logger.LogWarning("Out of stock for item {ItemId} traceId={TraceId}", request.ItemId, traceId);
+            return Results.Json(new InventoryResponse(false, "Out of stock"));
+            
+        case 4: // Inventory service error
+            await Task.Delay(50);
+            logger.LogError("Inventory internal error for item {ItemId} traceId={TraceId}", request.ItemId, traceId);
+            return Results.StatusCode(StatusCodes.Status500InternalServerError);
+            
+        case 6: // Slow inventory
+            logger.LogInformation("Slow processing for item {ItemId} traceId={TraceId}", request.ItemId, traceId);
+            await Task.Delay(2000); // 2 second delay
+            logger.LogInformation("Item available {ItemId} qty {Quantity} traceId={TraceId}", request.ItemId, request.Quantity, traceId);
+            return Results.Json(new InventoryResponse(true, null));
+            
+        default: // Unknown item
+            await Task.Delay(50);
+            logger.LogWarning("Item not found {ItemId} traceId={TraceId}", request.ItemId, traceId);
+            return Results.Json(new InventoryResponse(false, "Item not found"));
     }
-
-    if (!stock.TryGetValue(request.ItemId, out var available)) {
-        logger.LogInformation("Item not found {ItemId} traceId={TraceId}", request.ItemId, traceId);
-        return Results.Json(new InventoryResponse(false, "Item not found"));
-    }
-
-    if (available <= 0 || available < request.Quantity) {
-        logger.LogInformation("Out of stock for item {ItemId} traceId={TraceId}", request.ItemId, traceId);
-        return Results.Json(new InventoryResponse(false, "Out of stock"));
-    }
-
-    // Occasionally behave slow to show latency.
-    if (random.NextDouble() < 0.1) {
-        await Task.Delay(1000);
-    }
-
-    logger.LogInformation("Item available {ItemId} qty {Quantity} traceId={TraceId}", request.ItemId, request.Quantity, traceId);
-    return Results.Json(new InventoryResponse(true, null));
 });
 
 app.Run();

@@ -30,7 +30,6 @@ services:
     depends_on:
       - elasticsearch
     ports:
-      - "5000:5000"
       - "5044:5044"
     volumes:
       - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
@@ -58,8 +57,6 @@ services:
       dockerfile: src/InventoryService/Dockerfile
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - Logstash__Host=logstash
-      - Logstash__Port=5000
     volumes:
       - logs-inventory:/app/logs
     depends_on:
@@ -73,8 +70,6 @@ services:
       dockerfile: src/PaymentService/Dockerfile
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - Logstash__Host=logstash
-      - Logstash__Port=5000
     volumes:
       - logs-payment:/app/logs
     depends_on:
@@ -90,8 +85,6 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - InventoryService__BaseUrl=http://inventory-service
       - PaymentService__BaseUrl=http://payment-service
-      - Logstash__Host=logstash
-      - Logstash__Port=5000
     volumes:
       - logs-order:/app/logs
     ports:

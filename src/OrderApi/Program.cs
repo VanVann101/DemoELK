@@ -3,24 +3,20 @@ using Serilog.Formatting.Json;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
-internal class Program {
+public class Program {
     private static void Main(string[] args) {
         var builder = WebApplication.CreateBuilder(args);
 
         builder.Host.UseSerilog((context, services, configuration) => {
-            var logstashHost = context.Configuration["Logstash:Host"] ?? "logstash";
-            var logstashPort = context.Configuration.GetValue<int?>("Logstash:Port") ?? 5000;
-            var logstashUrl = $"http://{logstashHost}:{logstashPort}";
-
             configuration
                 .ReadFrom.Configuration(context.Configuration)
                 .ReadFrom.Services(services)
                 .Enrich.FromLogContext()
                 .Enrich.WithMachineName()
                 .Enrich.WithThreadId()
-                .WriteTo.Console(new JsonFormatter())
-                .WriteTo.File(new JsonFormatter(), "/app/logs/order-api.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
-                .WriteTo.Http(logstashUrl, queueLimitBytes: null, textFormatter: new JsonFormatter(renderMessage: true));
+                .Enrich.WithProperty("service", "order-api")
+                .WriteTo.Console(new JsonFormatter(renderMessage: true))
+                .WriteTo.File(new JsonFormatter(renderMessage: true), "/app/logs/order-api.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7);
         });
 
         builder.Services.AddHttpClient("inventory", client => {
@@ -37,9 +33,28 @@ internal class Program {
 
         builder.Services.AddSingleton<OrderRepository>();
 
+        // Add Swagger
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen(c => {
+            c.SwaggerDoc("v1", new() { 
+                Title = "Order API", 
+                Version = "v1",
+                Description = "Demo API для управления заказами с интеграцией ELK стека"
+            });
+        });
+
         var app = builder.Build();
 
-        app.MapGet("/", () => Results.Ok(new { status = "ok", service = "order-api" }));
+        // Enable Swagger UI
+        app.UseSwagger();
+        app.UseSwaggerUI(c => {
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "Order API v1");
+            c.RoutePrefix = "swagger";
+        });
+
+        app.MapGet("/", () => Results.Ok(new { status = "ok", service = "order-api", swagger = "/swagger" }))
+            .WithName("HealthCheck")
+            .WithTags("Health");
 
         app.MapPost("/orders", async (OrderRequest request, IHttpClientFactory factory, OrderRepository repository, ILogger<Program> logger, HttpContext httpContext) => {
             var traceId = Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
@@ -113,12 +128,16 @@ internal class Program {
             var saved = repository.AddOrder(request, OrderStatus.Completed, "Ok");
             logger.LogInformation("Order completed {@Order} traceId={TraceId}", saved, traceId);
             return Results.Json(new OrderResponse(saved.Id, saved.Status.ToString(), traceId, "Order processed"));
-        });
+        })
+        .WithName("CreateOrder")
+        .WithTags("Orders");
 
         app.MapGet("/orders/{id:guid}", (Guid id, OrderRepository repository) => {
             var order = repository.Get(id);
             return order is null ? Results.NotFound() : Results.Ok(order);
-        });
+        })
+        .WithName("GetOrder")
+        .WithTags("Orders");
 
         app.Run();
     }

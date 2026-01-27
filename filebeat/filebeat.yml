@@ -16,8 +16,6 @@ filebeat.inputs:
     fields:
       service: inventory-service
     fields_under_root: true
-    json.keys_under_root: true
-    json.add_error_key: true
 
   - type: log
     enabled: true
