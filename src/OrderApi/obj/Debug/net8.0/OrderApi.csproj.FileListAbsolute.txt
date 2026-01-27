@@ -1,7 +1,0 @@
-C:\Users\vorotnikov\Desktop\ELK\src\OrderApi\obj\Debug\net8.0\OrderApi.csproj.AssemblyReference.cache
-C:\Users\vorotnikov\Desktop\ELK\src\OrderApi\obj\Debug\net8.0\rpswa.dswa.cache.json
-C:\Users\vorotnikov\Desktop\ELK\src\OrderApi\obj\Debug\net8.0\OrderApi.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\vorotnikov\Desktop\ELK\src\OrderApi\obj\Debug\net8.0\OrderApi.AssemblyInfoInputs.cache
-C:\Users\vorotnikov\Desktop\ELK\src\OrderApi\obj\Debug\net8.0\OrderApi.AssemblyInfo.cs
-C:\Users\vorotnikov\Desktop\ELK\src\OrderApi\obj\Debug\net8.0\OrderApi.csproj.CoreCompileInputs.cache
-C:\Users\vorotnikov\Desktop\ELK\src\OrderApi\obj\Debug\net8.0\OrderApi.MvcApplicationPartsAssemblyInfo.cache
