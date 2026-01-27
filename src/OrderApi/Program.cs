@@ -48,6 +48,10 @@ internal class Program {
             var inventoryClient = factory.CreateClient("inventory");
             var paymentClient = factory.CreateClient("payment");
 
+            // Add traceId to request headers
+            inventoryClient.DefaultRequestHeaders.Add("X-Trace-Id", traceId);
+            paymentClient.DefaultRequestHeaders.Add("X-Trace-Id", traceId);
+
             InventoryResponse? inventoryResponse;
             try {
                 var inventoryHttpResponse = await inventoryClient.PostAsJsonAsync("/inventory/check", request);
@@ -166,4 +170,3 @@ class OrderRepository
 
     public OrderRecord? Get(Guid id) => _orders.TryGetValue(id, out var value) ? value : null;
 }
-

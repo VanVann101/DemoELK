@@ -68,6 +68,15 @@ curl http://localhost:8080/orders/{orderId}
 
 Logstash нормализует все три формата в единую структуру для Elasticsearch.
 
+## Распределённая трассировка (Distributed Tracing)
+Проект реализует простую распределённую трассировку через HTTP заголовок `X-Trace-Id`:
+1. **order-api** генерирует уникальный `traceId` для каждого запроса
+2. Передаёт `traceId` в заголовках HTTP запросов к inventory-service и payment-service
+3. Все три сервиса логируют один и тот же `traceId`
+4. В Kibana можно найти все логи одного запроса по полю `traceId`
+
+Пример поиска в Kibana: `traceId:"abc123def456"` покажет весь путь запроса через все сервисы.
+
 ## Поведение для демо
 - `inventory-service`: 10% 500, 10% дополнительная задержка ~1s, учёт остатка по товару.
 - `payment-service`: ~15% `InsufficientFunds`, ~10% 500, остальное — успех.
