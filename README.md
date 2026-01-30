@@ -7,12 +7,9 @@
 - `inventory-service` — проверяет наличие товара, иногда отвечает 500/долгие ответы.
 - `payment-service` — имитирует оплату: успех / недостаточно средств / 500.
 - `filebeat` — собирает логи из файлов сервисов и отправляет в Logstash.
-- `logstash` — принимает логи от Filebeat (порт 5044) и напрямую от сервисов (порт 5000), нормализует и кладёт в Elasticsearch.
+- `logstash` — принимает логи от Filebeat (порт 5044), нормализует и кладёт в Elasticsearch.
 - `elasticsearch`, `kibana` — хранение и визуализация логов.
-
-Все сервисы логируют двумя способами:
-1. В файлы `/app/logs/*.log` (собираются Filebeat)
-2. Напрямую в Logstash через HTTP (порт 5000)
+- `locust` — генератор нагрузки для создания тысяч логов (Web UI на порту 8089).
 
 ## Запуск
 ```bash
@@ -20,6 +17,7 @@ docker compose up --build
 ```
 - Order API: http://localhost:8080
 - **Swagger UI**: http://localhost:8080/swagger (интерактивная документация API)
+- **Locust UI**: http://localhost:8089 (генератор нагрузки для тестирования)
 - Kibana: http://localhost:5601 (security выключен для простоты)
 - Logstash Beats input: tcp://localhost:5044
 - Elasticsearch: http://localhost:9200
@@ -84,7 +82,22 @@ Invoke-RestMethod 'http://localhost:9200/dotnet-logs-*/_ilm/explain' | ConvertTo
 
 ## Проверка сценария
 
-### Через Swagger UI (рекомендуется)
+### Через Locust (рекомендуется для генерации нагрузки)
+Откройте http://localhost:8089 и настройте:
+1. **Number of users**: 50 (одновременных пользователей)
+2. **Spawn rate**: 5 (новых пользователей в секунду)
+3. Нажмите **"Start swarming"**
+
+Locust автоматически создаст тысячи запросов с реалистичным распределением сценариев:
+- 50% успешных заказов
+- 15% out of stock
+- 10% insufficient funds
+- 10% ошибки сервисов
+- 15% медленные запросы
+
+**Подробная документация:** см. [LOAD_TESTING.md](LOAD_TESTING.md)
+
+### Через Swagger UI (для ручного тестирования)
 Откройте http://localhost:8080/swagger и используйте интерактивный интерфейс:
 1. Раскройте `POST /orders`
 2. Нажмите "Try it out"
