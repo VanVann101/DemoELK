@@ -22,58 +22,44 @@ builder.Host.UseSerilog((context, services, configuration) => {
 
 var app = builder.Build();
 
-// Deterministic test scenarios based on itemId
-var testScenarios = new Dictionary<int, string>
-{
-    { 1, "success" },
-    { 2, "out_of_stock" },
-    { 3, "insufficient_funds" },
-    { 4, "inventory_error" },
-    { 5, "payment_error" },
-    { 6, "slow_inventory" },
-    { 7, "slow_payment" }
-};
-
 app.MapGet("/", () => Results.Ok(new { 
     status = "ok", 
     service = "payment-service",
-    testScenarios = testScenarios.Select(kv => new { itemId = kv.Key, scenario = kv.Value })
 }));
 
 app.MapPost("/payment/charge", async (PaymentRequest request, ILogger<Program> logger, HttpContext httpContext) =>
 {
     var traceId = httpContext.Request.Headers["X-Trace-Id"].FirstOrDefault() ?? "unknown";
     
-    // Deterministic behavior based on itemId
     switch (request.ItemId)
     {
         case 1: // Success
-        case 2: // Success (but will fail in inventory)
-        case 4: // Success (but will fail in inventory)
-        case 6: // Success (but slow in inventory)
+        case 2: // Success (will fail in inventory)
+        case 4: // Success (will fail in inventory)
+        case 6: // Success (slow inventory)
             await Task.Delay(100);
-            logger.LogInformation("Payment approved for user {UserId} traceId={TraceId}", request.UserId, traceId);
+            logger.LogInformation("Payment approved user={UserId} traceId={TraceId}", request.UserId, traceId);
             return Results.Json(new PaymentResponse("Success", null));
             
         case 3: // Insufficient funds
             await Task.Delay(100);
-            logger.LogWarning("Payment declined for user {UserId} - insufficient funds traceId={TraceId}", request.UserId, traceId);
+            logger.LogWarning("Payment declined - insufficient funds user={UserId} traceId={TraceId}", request.UserId, traceId);
             return Results.Json(new PaymentResponse("InsufficientFunds", "Balance too low"));
             
-        case 5: // Payment service error
+        case 5: // Payment error
             await Task.Delay(100);
-            logger.LogError("External processor failure for user {UserId} traceId={TraceId}", request.UserId, traceId);
+            logger.LogError("External processor failure user={UserId} traceId={TraceId}", request.UserId, traceId);
             return Results.StatusCode(StatusCodes.Status500InternalServerError);
             
         case 7: // Slow payment
-            logger.LogInformation("Slow payment processing for user {UserId} traceId={TraceId}", request.UserId, traceId);
-            await Task.Delay(2000); // 2 second delay
-            logger.LogInformation("Payment approved for user {UserId} traceId={TraceId}", request.UserId, traceId);
+            logger.LogInformation("Slow payment processing started user={UserId} traceId={TraceId}", request.UserId, traceId);
+            await Task.Delay(2000);
+            logger.LogInformation("Payment approved after delay user={UserId} traceId={TraceId}", request.UserId, traceId);
             return Results.Json(new PaymentResponse("Success", null));
             
-        default: // Unknown scenario - success
+        default:
             await Task.Delay(100);
-            logger.LogInformation("Payment approved for user {UserId} traceId={TraceId}", request.UserId, traceId);
+            logger.LogInformation("Payment approved user={UserId} traceId={TraceId}", request.UserId, traceId);
             return Results.Json(new PaymentResponse("Success", null));
     }
 });
@@ -82,4 +68,3 @@ app.Run();
 
 record PaymentRequest(int ItemId, int Quantity, string UserId);
 record PaymentResponse(string Status, string? Reason);
-
